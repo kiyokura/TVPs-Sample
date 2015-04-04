@@ -1,0 +1,131 @@
+﻿@using System.Data
+@using System.Data.SqlClient
+
+@{
+  Layout = null;
+
+  var connectionString = System.Web.Configuration.WebConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+
+  // 配列からTVPsとして渡すためのDataTableを作っておく
+  var values = new int[] { 1, 2 };
+  var tvp = createValuesTvp(values);
+}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width" />
+  <title></title>
+</head>
+<body>
+  <div>
+    <h2>SELECT文</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "SELECT Id, Name, Age FROM Users WHERE Id IN (SELECT Value FROM @tvp);";
+        var cmd = new SqlCommand(sql, con);
+        var param = cmd.Parameters.AddWithValue("@tvp", tvp);
+        param.SqlDbType = SqlDbType.Structured;
+        param.TypeName = "dbo.IntValueTableType";
+
+        using (var dr = cmd.ExecuteReader())
+        {
+          while (dr.Read())
+          {
+            <span>@dr["id"]</span>
+          }
+        }
+      }
+    }
+  </div>
+  <div>
+    <h2>ストアアドプロシージャ</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "dbo.SummaryValueProc";
+        var cmd = new SqlCommand(sql, con);
+        cmd.CommandType = CommandType.StoredProcedure;
+        var param = cmd.Parameters.AddWithValue("@Values", tvp); // ストアド側のパラメータとして定義した名前
+        param.SqlDbType = SqlDbType.Structured;
+        param.TypeName = "dbo.IntValueTableType";
+
+        using (var dr = cmd.ExecuteReader())
+        {
+          while (dr.Read())
+          {
+            <span>@dr["Summary"]</span>
+          }
+        }
+      }
+    }
+  </div>
+  <div>
+    <h2>スカラ値関数</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "SELECT dbo.SummaryValue(@tvp) AS Summary;";
+        var cmd = new SqlCommand(sql, con);
+        var param = cmd.Parameters.AddWithValue("@tvp", tvp);
+        param.SqlDbType = System.Data.SqlDbType.Structured;
+        param.TypeName = "dbo.IntValueTableType";
+
+        using (var dr = cmd.ExecuteReader())
+        {
+          while (dr.Read())
+          {
+            <span>@dr["Summary"]</span>
+          }
+        }
+      }
+    }
+  </div>
+
+  <div>
+    <h2>テーブル値関数</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "SELECT Value FROM dbo.TransformValue(@tvp);";
+        var cmd = new SqlCommand(sql, con);
+        var param = cmd.Parameters.AddWithValue("@tvp", tvp);
+        param.SqlDbType = System.Data.SqlDbType.Structured;
+        param.TypeName = "dbo.IntValueTableType";
+
+        using (var dr = cmd.ExecuteReader())
+        {
+          while (dr.Read())
+          {
+            <span>@dr["Value"]</span>
+          }
+        }
+      }
+    }
+  </div>
+</body>
+</html>
+@functions{
+  private System.Data.DataTable createValuesTvp(int[] values)
+  {
+    var dt = new System.Data.DataTable();
+    dt.Columns.Add("Values", typeof(int));
+    foreach (var value in values)
+    {
+      var row = dt.NewRow();
+      row[0] = value;
+      dt.Rows.Add(row);
+    }
+    dt.EndLoadData();
+    return dt;
+  }
+
+}
