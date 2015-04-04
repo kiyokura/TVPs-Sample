@@ -1,0 +1,124 @@
+﻿@using System.Data
+@using System.Data.SqlClient
+@using Dapper;
+
+@{
+  Layout = null;
+
+  var connectionString = System.Web.Configuration.WebConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+
+  // 配列からTVPsとして渡すためのDataTableを作っておく
+  var values = new int[] { 1, 2 };
+  var tvp = createValuesTvp(values);
+}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width" />
+  <title></title>
+</head>
+<body>
+  <div>
+    <h2>SELECT文</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+        var sql = "SELECT Id, Name, Age FROM Users WHERE Id IN (SELECT Value FROM @tvp);";
+        var param = new { tvp = tvp.AsTableValuedParameter("dbo.IntValueTableType") }; //AsTableValuedParameterでTVPsの型名を設定
+        var rows = con.Query(sql, param);
+        foreach (var row in rows)
+        {
+          <span>@row.Id</span>
+        }
+      }
+    }
+  </div>
+  <div>
+    <h2>ストアアドプロシージャ</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "dbo.SummaryValueProc";
+        var param = new { Values = tvp.AsTableValuedParameter("dbo.IntValueTableType") };
+        var rows = con.Query(sql, param, commandType: CommandType.StoredProcedure);
+        foreach (var row in rows)
+        {
+          <span>@row.Summary</span>
+        }
+      }
+    }
+  </div>
+  <div>
+    <h2>ストアアドプロシージャ(AsTableValuedParameter)無し</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "dbo.SummaryValueProc";
+        var param = new { Values = tvp }; // AsTableValuedParameter 無しでもいける
+        var rows = con.Query(sql, param, commandType: CommandType.StoredProcedure);
+        foreach (var row in rows)
+        {
+          <span>@row.Summary</span>
+        }
+      }
+    }
+  </div>
+  <div>
+    <h2>スカラ値関数</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "SELECT dbo.SummaryValue(@tvp) AS Summary;";
+        var param = new { tvp = tvp.AsTableValuedParameter("dbo.IntValueTableType") };
+        var rows = con.Query(sql, param);
+        foreach (var row in rows)
+        {
+          <span>@row.Summary</span>
+        }
+      }
+    }
+  </div>
+
+  <div>
+    <h2>テーブル値関数</h2>
+    @{
+      using (var con = new SqlConnection(connectionString))
+      {
+        con.Open();
+
+        var sql = "SELECT Value FROM dbo.TransformValue(@tvp);";
+        var param = new { tvp = tvp.AsTableValuedParameter("dbo.IntValueTableType") };
+        var rows = con.Query(sql, param);
+        foreach (var row in rows)
+        {
+          <span>@row.Value</span>
+        }
+      }
+    }
+    }
+  </div>
+</body>
+</html>
+@functions{
+  private System.Data.DataTable createValuesTvp(int[] values)
+  {
+    var dt = new System.Data.DataTable();
+    dt.Columns.Add("Values", typeof(int));
+    foreach (var value in values)
+    {
+      var row = dt.NewRow();
+      row[0] = value;
+      dt.Rows.Add(row);
+    }
+    dt.EndLoadData();
+    return dt;
+  }
+
+}
